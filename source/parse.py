@@ -2,6 +2,7 @@ from selenium import webdriver
 from PIL import Image
 import time
 import numpy as np
+import cv2 as cv
 
 chromedriver = '/Users/alikhantuxubayev/Desktop/work/ParsePolygon/chromedriver'
 link = 'https://yandex.kz/maps'
@@ -57,26 +58,68 @@ def draw_point():
 
     rgb_im.putpixel(list_from_x, path)
     rgb_im.putpixel(list_to_y, magneta)
-    rgb_im.putpixel((300, 300), navy)
     rgb_im.save('screens/main.png')
 
     return list_from_x, list_to_y
 
 
-def polygon_coord():
-    point3 = [300, 300]
-    from_x, to_y = draw_point()
-    x = to_y[0] - from_x[0]
-    y = to_y[1] - from_x[1]
-    x1 = point3[0] - from_x[0]
-    y1 = point3[1] - from_x[1]
-    to_coord = ruller_coord()
-    res_x = to_coord[0] / y
-    res_y = to_coord[1] / x
-    x_coord = str(res_x * y1)
-    y_coord = str(res_y * x1)
+def corners():
+    img = cv.imread('screens/clear.png')
+    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    corners = cv.goodFeaturesToTrack(gray, 100, 0.09, 10)
+    corners = np.int0(corners)
 
-    print(y_coord[:9], x_coord[:9])
+    corners_list = []
+    for corner in corners:
+        x, y = corner.ravel()
+        cv.circle(img, (x, y), 3, [0, 150, 0], -1)
+
+    for i in range(1, len(corners)):
+        corners_list.append(corners[i])
+
+    cv.imwrite('screens/good_featurs.png', img)
+
+    return corners_list
+
+
+def polygon_coord():
+    point3_coords = corners()
+    for i in point3_coords:
+        point3 = i
+        from_x, to_y = draw_point()
+        x = to_y[0] - from_x[0]
+        y = to_y[1] - from_x[1]
+        x1 = point3[0][0] - from_x[0]
+        y1 = point3[0][1] - from_x[1]
+        to_coord = ruller_coord()
+        res_x = to_coord[0] / y
+        res_y = to_coord[1] / x
+        x_coord = str(res_x * y1)
+        y_coord = str(res_y * x1)
+
+        print(y_coord[:9], x_coord[:9])
+
+
+def clear_img():
+    im = Image.open("screens/main.png")
+    rgb_im = im.convert('RGB')
+    pixels = rgb_im.load()
+    color = rgb_im.getcolors()
+
+    magneta = (255, 0, 255)
+    navy = (0, 0, 128)
+    path = (254, 0, 0)
+    border_black = (0, 0, 0)
+
+    for x in range(rgb_im.size[1]):
+        for y in range(rgb_im.size[0]):
+            coords = y, x
+            if pixels[coords] == navy or pixels[coords] == magneta or pixels[coords] == path:
+                rgb_im.putpixel(coords, (255, 255, 255))
+
+    rgb_im.save('screens/clear.png')
+
+    return rgb_im
 
 
 def open_browser(url):
@@ -94,7 +137,6 @@ def get_location():
     time.sleep(10)
     ruller_draw()
     time.sleep(5)
-    polygon_coord()
     ruler_balloon = browser.find_element_by_class_name("ruler-balloon__label").text
     zoom = browser.current_url.rsplit('=', 1)[-1]
     coordinates = browser.find_element_by_class_name('clipboard__content').text
@@ -104,7 +146,6 @@ def get_location():
 def take_screen():
     get_location()
     title_script = 'document.styleSheets[0].insertRule(".search-placemark-view__title {display: none;}", 0 )'
-    path_script = 'document.styleSheets[0].insertRule("div.search-placemark-icons__active > svg > g > path:nth-child(3) {color: #04FF35;}", 0 )'
     marker_script = 'document.styleSheets[0].insertRule("div.search-placemark-icons__active > svg > g > g > use:nth-child(2) {display: none;}", 0 )'
     marker2_script = 'document.styleSheets[0].insertRule("div.search-placemark-icons__active > svg > g > g > use:nth-child(1) {display: none;}", 0 )'
     marker3_script = 'document.styleSheets[0].insertRule("div.search-placemark-view__icon > div > div > div:nth-child(2) > div {display: none;}", 0 )'
@@ -116,7 +157,7 @@ def take_screen():
     ruller_view_point = 'document.styleSheets[0].insertRule(".ruler-view__point {background: #FF4500;}", 0 )'
     time.sleep(4)
 
-    scripts = [title_script, path_script, marker_script, marker2_script, marker3_script, border_script,
+    scripts = [title_script, marker_script, marker2_script, marker3_script, border_script,
                border_capacity_script, searcher, lang, logo, ruller_view_point]
 
     for script in scripts:
@@ -126,7 +167,6 @@ def take_screen():
     element.screenshot("screens/screenshot.png")
 
     time.sleep(3)
-    browser.quit()
 
 
 def location_rendering():
@@ -151,6 +191,9 @@ def location_rendering():
                     im2.putpixel((y, x), NAVY)
 
     im2.save('screens/output.png')
+    polygon_coord()
+    browser.quit()
+    clear_img()
 
 
 take_screen()
